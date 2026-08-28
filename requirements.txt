@@ -1,0 +1,11 @@
+streamlit
+pandas
+numpy
+joblib
+scikit-learn
+shap
+SpeechRecognition
+requests
+gTTS
+pydub
+streamlit-mic-recorder
