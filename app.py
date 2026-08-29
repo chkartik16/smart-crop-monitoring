@@ -99,7 +99,7 @@ def save_telegram_user(chat_id):
         )
 
 # ============================================================
-# SEND TELEGRAM ALERT TO ALL CONNECTED USERS
+# SEND TELEGRAM ALERT TO CURRENT USER ONLY
 # ============================================================
 
 def send_telegram_alert(
@@ -108,29 +108,17 @@ def send_telegram_alert(
     temperature,
     humidity,
     rainfall,
-    probability
+    probability,
+    chat_id
 ):
 
     bot_token = st.secrets["TELEGRAM_BOT_TOKEN"]
 
-    # Load connected Telegram users
-    try:
-
-        with open("users.json", "r") as file:
-            users = json.load(file)
-
-    except (FileNotFoundError, json.JSONDecodeError):
-
-        users = {}
-
-    # Check if users are connected
-    if not users:
-
+    if not chat_id:
         raise Exception(
-            "No Telegram users are connected."
+            "Telegram is not connected."
         )
 
-    # Create alert message
     message = (
         "🚨 IRRIGATION ALERT\n\n"
         f"Crop: {crop_type}\n"
@@ -149,27 +137,17 @@ def send_telegram_alert(
         f"{bot_token}/sendMessage"
     )
 
-    sent_count = 0
+    response = requests.post(
+        url,
+        data={
+            "chat_id": chat_id,
+            "text": message
+        }
+    )
 
-    # Send alert to every connected user
-    for user in users.values():
+    response.raise_for_status()
 
-        chat_id = user["chat_id"]
-
-        response = requests.post(
-            url,
-            data={
-                "chat_id": chat_id,
-                "text": message
-            }
-        )
-
-        response.raise_for_status()
-
-        sent_count += 1
-
-    return sent_count
-
+    return response.json()
 # ============================================================
 # PAGE CONFIG
 # ============================================================
@@ -260,37 +238,18 @@ def save_telegram_user(chat_id):
         )
 
 
-
 # ============================================================
 # TELEGRAM CONNECTION
 # ============================================================
 
-st.divider()
-
 st.subheader("📱 Connect Telegram Alerts")
 
 st.write(
-    "Connect your Telegram account to receive irrigation alerts."
+    "Connect your Telegram account to receive personal irrigation alerts."
 )
 
-telegram_url = (
-    "https://t.me/SmartCropMonitoringBot?start=connect"
-)
-
-st.link_button(
-    "🤖 Open Smart Crop Monitoring Bot",
-    telegram_url,
-    use_container_width=True
-)
-
-st.info(
-    "Click the button, open the bot in Telegram, "
-    "press Start, then return to this website."
-)
-
-# Check Telegram connection
 if st.button(
-    "✅ Check Telegram Connection",
+    "🔗 Connect Telegram",
     use_container_width=True
 ):
 
@@ -303,13 +262,17 @@ if st.button(
         save_telegram_user(chat_id)
 
         st.success(
-            "🎉 Telegram connected successfully!"
+            "✅ Telegram connected successfully!"
+        )
+
+        st.info(
+            "Your irrigation alerts will be sent only to this Telegram account."
         )
 
     else:
 
         st.warning(
-            "Please open the Telegram bot and press Start first."
+            "Please open the Telegram bot and send /start first."
         )
 # ============================================================
 # CROP INFORMATION
@@ -391,8 +354,6 @@ input_data = pd.DataFrame({
     "Crop_Type": [crop_type],
     "Growth_Stage": [growth_stage]
 })
-
-
 # ============================================================
 # IRRIGATION PREDICTION
 # ============================================================
@@ -433,18 +394,29 @@ if st.button("Check Irrigation", use_container_width=True):
         # Telegram alert
         try:
 
-            sent_count = send_telegram_alert(
+            chat_id = st.session_state.get(
+                "telegram_chat_id"
+            )
+
+            if not chat_id:
+                raise Exception(
+                    "Telegram is not connected. "
+                    "Please connect Telegram first."
+                )
+
+            send_telegram_alert(
                 crop_type,
                 soil_moisture,
                 temperature,
                 humidity,
                 rainfall,
-                probability
+                probability,
+                chat_id
             )
 
             st.success(
-                f"📱 Telegram irrigation alert sent to "
-                f"{sent_count} connected user(s)!"
+                "📱 Telegram irrigation alert sent to "
+                "your connected Telegram account!"
             )
 
         except Exception as error:
@@ -468,6 +440,8 @@ if st.button("Check Irrigation", use_container_width=True):
         "Irrigation Probability",
         f"{probability * 100:.1f}%"
     )
+
+
     # ========================================================
     # SHAP EXPLANATION
     # ========================================================
