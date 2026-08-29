@@ -34,40 +34,6 @@ model = joblib.load("irrigation_model.pkl")
 preprocessor = model.named_steps["preprocessor"]
 classifier = model.named_steps["model"]
 
-# ============================================================
-# GET TELEGRAM CHAT ID
-# ============================================================
-
-def get_telegram_chat_id():
-
-    bot_token = st.secrets["TELEGRAM_BOT_TOKEN"]
-
-    url = (
-        f"https://api.telegram.org/bot"
-        f"{bot_token}/getUpdates"
-    )
-
-    response = requests.get(url)
-
-    response.raise_for_status()
-
-    data = response.json()
-
-    if data["ok"] and data["result"]:
-
-        latest_update = data["result"][-1]
-
-        message = latest_update.get("message")
-
-        if message:
-
-            chat = message.get("chat")
-
-            if chat:
-
-                return str(chat["id"])
-
-    return None
 
 # ============================================================
 # SAVE TELEGRAM USER
