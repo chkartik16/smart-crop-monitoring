@@ -7,6 +7,7 @@ import shap
 import speech_recognition as sr
 import requests
 import json
+import uuid
 
 from io import BytesIO
 from gtts import gTTS
@@ -34,35 +35,6 @@ model = joblib.load("irrigation_model.pkl")
 preprocessor = model.named_steps["preprocessor"]
 classifier = model.named_steps["model"]
 
-
-# ============================================================
-# SAVE TELEGRAM USER
-# ============================================================
-
-def save_telegram_user(chat_id):
-
-    file_path = "users.json"
-
-    try:
-
-        with open(file_path, "r") as file:
-            users = json.load(file)
-
-    except (FileNotFoundError, json.JSONDecodeError):
-
-        users = {}
-
-    users[str(chat_id)] = {
-        "chat_id": str(chat_id)
-    }
-
-    with open(file_path, "w") as file:
-
-        json.dump(
-            users,
-            file,
-            indent=4
-        )
 
 # ============================================================
 # SEND TELEGRAM ALERT TO CURRENT USER ONLY
@@ -139,10 +111,10 @@ st.divider()
 
 
 # ============================================================
-# GET TELEGRAM CHAT ID
+# GET TELEGRAM CHAT ID USING UNIQUE CONNECTION CODE
 # ============================================================
 
-def get_telegram_chat_id():
+def get_telegram_chat_id(connection_code):
 
     bot_token = st.secrets["TELEGRAM_BOT_TOKEN"]
 
@@ -152,23 +124,29 @@ def get_telegram_chat_id():
     )
 
     response = requests.get(url)
-
     response.raise_for_status()
 
     data = response.json()
 
-    if data["ok"] and data["result"]:
+    if not data["ok"]:
+        return None
 
-        latest_update = data["result"][-1]
+    for update in reversed(data["result"]):
 
-        message = latest_update.get("message")
+        message = update.get("message")
 
-        if message:
+        if not message:
+            continue
+
+        text = message.get("text", "")
+
+        expected_text = f"/start {connection_code}"
+
+        if text.strip() == expected_text:
 
             chat = message.get("chat")
 
             if chat:
-
                 return str(chat["id"])
 
     return None
@@ -214,32 +192,66 @@ st.write(
     "Connect your Telegram account to receive personal irrigation alerts."
 )
 
+# Create a unique connection code for this browser session
+if "telegram_connection_code" not in st.session_state:
+
+    st.session_state["telegram_connection_code"] = (
+        uuid.uuid4().hex[:12]
+    )
+
+connection_code = st.session_state[
+    "telegram_connection_code"
+]
+
+telegram_bot_username = "SmartCropMonitoringBot"
+
+telegram_url = (
+    f"https://t.me/{telegram_bot_username}"
+    f"?start={connection_code}"
+)
+
+st.link_button(
+    "🤖 Open Telegram Bot",
+    telegram_url,
+    use_container_width=True
+)
+
+st.info(
+    "1. Open the Telegram bot using the button above.\n\n"
+    "2. Press Start in Telegram.\n\n"
+    "3. Return here and click Connect Telegram."
+)
+
 if st.button(
     "🔗 Connect Telegram",
     use_container_width=True
 ):
 
-    chat_id = get_telegram_chat_id()
+    chat_id = get_telegram_chat_id(
+        connection_code
+    )
 
     if chat_id:
 
         st.session_state["telegram_chat_id"] = chat_id
-
-        save_telegram_user(chat_id)
 
         st.success(
             "✅ Telegram connected successfully!"
         )
 
         st.info(
-            "Your irrigation alerts will be sent only to this Telegram account."
+            "Your irrigation alerts will be sent only "
+            "to your connected Telegram account."
         )
 
     else:
 
         st.warning(
-            "Please open the Telegram bot and send /start first."
+            "Telegram connection not found. "
+            "Please open the bot, press Start, "
+            "and then click Connect Telegram again."
         )
+
 # ============================================================
 # CROP INFORMATION
 # ============================================================
