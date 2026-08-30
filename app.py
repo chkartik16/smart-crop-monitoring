@@ -86,28 +86,105 @@ def send_telegram_alert(
     response.raise_for_status()
 
     return response.json()
+
+
 # ============================================================
-# PAGE CONFIG
+# PAGE CONFIG  (wide layout instead of centered)
 # ============================================================
 
 st.set_page_config(
     page_title="Smart Crop Monitoring",
     page_icon="🌱",
-    layout="centered"
+    layout="wide"
 )
 
 
 # ============================================================
-# TITLE
+# GLOBAL CSS POLISH
 # ============================================================
 
-st.title("🌱 Smart Crop Monitoring System")
+st.markdown(
+    """
+    <style>
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 3rem;
+        max-width: 1100px;
+    }
 
-st.write(
-    "AI-powered irrigation prediction with Explainable AI."
+    div[data-testid="stMetric"] {
+        background-color: #F1F8E9;
+        border: 1px solid #C8E6C9;
+        border-radius: 12px;
+        padding: 14px 16px;
+    }
+
+    div[data-testid="stButton"] > button,
+    div[data-testid="stLinkButton"] > a {
+        border-radius: 10px;
+        font-weight: 600;
+        transition: all 0.15s ease-in-out;
+    }
+
+    div[data-testid="stButton"] > button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 10px rgba(46, 125, 50, 0.25);
+    }
+
+    div[data-testid="stTabs"] button {
+        font-weight: 600;
+    }
+
+    .hero {
+        background: linear-gradient(135deg, #2E7D32 0%, #66BB6A 100%);
+        padding: 28px 32px;
+        border-radius: 16px;
+        color: white;
+        margin-bottom: 1.5rem;
+    }
+
+    .hero h1 {
+        color: white;
+        margin-bottom: 4px;
+    }
+
+    .hero p {
+        color: #E8F5E9;
+        margin-bottom: 0;
+        font-size: 1.05rem;
+    }
+
+    footer.app-footer {
+        text-align: center;
+        color: #6b6b6b;
+        font-size: 0.85rem;
+        padding-top: 2rem;
+    }
+
+    footer.app-footer a {
+        color: #2E7D32;
+        text-decoration: none;
+        font-weight: 600;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
 )
 
-st.divider()
+
+# ============================================================
+# HERO SECTION
+# ============================================================
+
+st.markdown(
+    """
+    <div class="hero">
+        <h1>🌱 Smart Crop Monitoring System</h1>
+        <p>AI-powered irrigation prediction with Explainable AI, Telegram alerts and a voice assistant.</p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 
 # ============================================================
@@ -183,164 +260,80 @@ def save_telegram_user(chat_id):
 
 
 # ============================================================
-# TELEGRAM CONNECTION
+# TABS — main navigation instead of one long scroll
 # ============================================================
 
-st.subheader("📱 Connect Telegram Alerts")
-
-st.write(
-    "Connect your Telegram account to receive personal irrigation alerts."
+tab_predict, tab_voice, tab_telegram, tab_about = st.tabs(
+    ["💧 Predict", "🎙️ Voice Assistant", "📱 Telegram Alerts", "ℹ️ About"]
 )
 
-# Create a unique connection code for this browser session
-if "telegram_connection_code" not in st.session_state:
 
-    st.session_state["telegram_connection_code"] = (
-        uuid.uuid4().hex[:12]
-    )
+# ============================================================
+# SHARED INPUT STATE
+# Rendered once inside the Predict tab, but referenced by
+# the Voice Assistant tab too — so collect it before the tabs
+# using session_state to avoid duplicate widgets.
+# ============================================================
 
-connection_code = st.session_state[
-    "telegram_connection_code"
-]
+with tab_predict:
 
-telegram_bot_username = "SmartCropMonitoringBot"
+    left, right = st.columns([1, 1], gap="large")
 
-telegram_url = (
-    f"https://t.me/{telegram_bot_username}"
-    f"?start={connection_code}"
-)
+    with left:
 
-st.link_button(
-    "🤖 Open Telegram Bot",
-    telegram_url,
-    use_container_width=True
-)
+        st.subheader("🌾 Crop Information")
 
-st.info(
-    "1. Open the Telegram bot using the button above.\n\n"
-    "2. Press Start in Telegram.\n\n"
-    "3. Return here and click Connect Telegram."
-)
-
-if st.button(
-    "🔗 Connect Telegram",
-    use_container_width=True
-):
-
-    chat_id = get_telegram_chat_id(
-        connection_code
-    )
-
-    if chat_id:
-
-        st.session_state["telegram_chat_id"] = chat_id
-
-        st.success(
-            "✅ Telegram connected successfully!"
+        crop_type = st.selectbox(
+            "Select Crop",
+            ["Wheat", "Rice", "Maize", "Cotton"],
+            key="crop_type"
         )
 
-        st.info(
-            "Your irrigation alerts will be sent only "
-            "to your connected Telegram account."
+        growth_stage = st.selectbox(
+            "Select Growth Stage",
+            ["Seedling", "Vegetative", "Flowering", "Maturity"],
+            key="growth_stage"
         )
 
-    else:
+    with right:
 
-        st.warning(
-            "Telegram connection not found. "
-            "Please open the bot, press Start, "
-            "and then click Connect Telegram again."
+        st.subheader("🌦️ Environmental Conditions")
+
+        soil_moisture = st.number_input(
+            "Soil Moisture (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=30.0,
+            step=1.0,
+            key="soil_moisture"
         )
 
-# ============================================================
-# CROP INFORMATION
-# ============================================================
+        temperature = st.number_input(
+            "Temperature (°C)",
+            min_value=-10.0,
+            max_value=60.0,
+            value=30.0,
+            step=1.0,
+            key="temperature"
+        )
 
-st.subheader("🌾 Crop Information")
+        humidity = st.number_input(
+            "Humidity (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=50.0,
+            step=1.0,
+            key="humidity"
+        )
 
-crop_type = st.selectbox(
-    "Select Crop",
-    [
-        "Wheat",
-        "Rice",
-        "Maize",
-        "Cotton"
-    ]
-)
-
-growth_stage = st.selectbox(
-    "Select Growth Stage",
-    [
-        "Seedling",
-        "Vegetative",
-        "Flowering",
-        "Maturity"
-    ]
-)
-
-
-# ============================================================
-# ENVIRONMENTAL CONDITIONS
-# ============================================================
-
-st.divider()
-
-st.subheader("🌦️ Environmental Conditions")
-
-soil_moisture = st.number_input(
-    "Soil Moisture (%)",
-    min_value=0.0,
-    max_value=100.0,
-    value=30.0,
-    step=1.0
-)
-
-temperature = st.number_input(
-    "Temperature (°C)",
-    min_value=-10.0,
-    max_value=60.0,
-    value=30.0,
-    step=1.0
-)
-
-humidity = st.number_input(
-    "Humidity (%)",
-    min_value=0.0,
-    max_value=100.0,
-    value=50.0,
-    step=1.0
-)
-
-rainfall = st.number_input(
-    "Rainfall (mm)",
-    min_value=0.0,
-    max_value=500.0,
-    value=0.0,
-    step=1.0
-)
-
-
-# ============================================================
-# INPUT DATA
-# ============================================================
-
-input_data = pd.DataFrame({
-    "Soil_Moisture": [soil_moisture],
-    "Temperature": [temperature],
-    "Humidity": [humidity],
-    "Rainfall": [rainfall],
-    "Crop_Type": [crop_type],
-    "Growth_Stage": [growth_stage]
-})
-# ============================================================
-# IRRIGATION PREDICTION
-# ============================================================
-
-st.divider()
-
-st.subheader("💧 Irrigation Decision")
-
-if st.button("Check Irrigation", use_container_width=True):
+        rainfall = st.number_input(
+            "Rainfall (mm)",
+            min_value=0.0,
+            max_value=500.0,
+            value=0.0,
+            step=1.0,
+            key="rainfall"
+        )
 
     input_data = pd.DataFrame({
         "Soil_Moisture": [soil_moisture],
@@ -351,530 +344,421 @@ if st.button("Check Irrigation", use_container_width=True):
         "Growth_Stage": [growth_stage]
     })
 
-    # Make prediction
-    prediction = model.predict(input_data)[0]
+    st.divider()
 
-    # Get irrigation probability
-    probability = model.predict_proba(input_data)[0][1]
+    st.subheader("💧 Irrigation Decision")
 
-    # Display prediction
-    if prediction == 1:
+    if st.button("Check Irrigation", use_container_width=True, type="primary"):
 
-        st.error(
-            "🚨 IRRIGATION REQUIRED"
-        )
+        with st.spinner("Analyzing field conditions..."):
 
-        st.write(
-            "The current field conditions indicate "
-            "that the crop may require irrigation."
-        )
+            prediction = model.predict(input_data)[0]
+            probability = model.predict_proba(input_data)[0][1]
 
-        # Telegram alert
-        try:
+        result_col, prob_col = st.columns([2, 1])
 
-            chat_id = st.session_state.get(
-                "telegram_chat_id"
-            )
+        with result_col:
 
-            if not chat_id:
-                raise Exception(
-                    "Telegram is not connected. "
-                    "Please connect Telegram first."
+            if prediction == 1:
+
+                st.error("🚨 IRRIGATION REQUIRED")
+
+                st.write(
+                    "The current field conditions indicate "
+                    "that the crop may require irrigation."
                 )
 
-            send_telegram_alert(
-                crop_type,
-                soil_moisture,
-                temperature,
-                humidity,
-                rainfall,
-                probability,
-                chat_id
+                try:
+
+                    chat_id = st.session_state.get("telegram_chat_id")
+
+                    if not chat_id:
+                        raise Exception(
+                            "Telegram is not connected. "
+                            "Please connect Telegram first."
+                        )
+
+                    send_telegram_alert(
+                        crop_type,
+                        soil_moisture,
+                        temperature,
+                        humidity,
+                        rainfall,
+                        probability,
+                        chat_id
+                    )
+
+                    st.success(
+                        "📱 Telegram irrigation alert sent to "
+                        "your connected Telegram account!"
+                    )
+
+                except Exception as error:
+
+                    st.warning(
+                        f"Telegram alert could not be sent: {error}"
+                    )
+
+            else:
+
+                st.success("✅ IRRIGATION NOT REQUIRED")
+
+                st.write(
+                    "The current field conditions do not indicate "
+                    "an immediate need for irrigation."
+                )
+
+        with prob_col:
+
+            st.metric(
+                "Irrigation Probability",
+                f"{probability * 100:.1f}%"
             )
 
-            st.success(
-                "📱 Telegram irrigation alert sent to "
-                "your connected Telegram account!"
-            )
+            st.progress(min(max(probability, 0.0), 1.0))
+
+        # ========================================================
+        # SHAP EXPLANATION
+        # ========================================================
+
+        st.divider()
+
+        st.subheader("🧠 Why did the model make this prediction?")
+
+        try:
+
+            transformed_input = preprocessor.transform(input_data)
+            feature_names = preprocessor.get_feature_names_out()
+
+            explainer = shap.TreeExplainer(classifier)
+            shap_values = explainer.shap_values(transformed_input)
+
+            if isinstance(shap_values, list):
+
+                shap_array = shap_values[prediction][0]
+
+            elif len(shap_values.shape) == 3:
+
+                shap_array = shap_values[0, :, prediction]
+
+            else:
+
+                shap_array = shap_values[0]
+
+            explanation = pd.DataFrame({
+                "Feature": feature_names,
+                "SHAP_Value": shap_array
+            })
+
+            explanation["Absolute_Impact"] = explanation["SHAP_Value"].abs()
+            explanation = explanation.sort_values("Absolute_Impact", ascending=False)
+            top_features = explanation.head(5)
+
+            st.write("### Top Factors Influencing the Prediction")
+
+            for _, row in top_features.iterrows():
+
+                feature = row["Feature"]
+                shap_value = row["SHAP_Value"]
+
+                feature = feature.replace("categorical__", "")
+                feature = feature.replace("remainder__", "")
+
+                if "Soil_Moisture" in feature:
+                    friendly_name = "Soil Moisture"
+                elif "Temperature" in feature:
+                    friendly_name = "Temperature"
+                elif "Humidity" in feature:
+                    friendly_name = "Humidity"
+                elif "Rainfall" in feature:
+                    friendly_name = "Rainfall"
+                elif "Crop_Type" in feature:
+                    friendly_name = "Crop Type"
+                elif "Growth_Stage" in feature:
+                    friendly_name = "Growth Stage"
+                else:
+                    friendly_name = feature
+
+                if shap_value > 0:
+                    explanation_text = f"{friendly_name} increased the irrigation requirement."
+                else:
+                    explanation_text = f"{friendly_name} reduced the irrigation requirement."
+
+                st.write(f"🔹 **{explanation_text}**")
+
+            st.write("### 📊 Feature Impact")
+
+            chart_data = top_features.set_index("Feature")["SHAP_Value"]
+            st.bar_chart(chart_data)
 
         except Exception as error:
 
             st.warning(
-                f"Telegram alert could not be sent: {error}"
+                "The model prediction was successful, "
+                "but the SHAP explanation could not be generated."
             )
 
-    else:
-
-        st.success(
-            "✅ IRRIGATION NOT REQUIRED"
-        )
-
-        st.write(
-            "The current field conditions do not indicate "
-            "an immediate need for irrigation."
-        )
-
-    st.metric(
-        "Irrigation Probability",
-        f"{probability * 100:.1f}%"
-    )
-
-
-    # ========================================================
-    # SHAP EXPLANATION
-    # ========================================================
+            st.write(f"Technical details: {error}")
 
     st.divider()
 
-    st.subheader(
-        "🧠 Why did the model make this prediction?"
+    st.subheader("🌾 Current Field Conditions")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.metric("Soil Moisture", f"{soil_moisture}%")
+
+    with col2:
+        st.metric("Temperature", f"{temperature}°C")
+
+    with col3:
+        st.metric("Humidity", f"{humidity}%")
+
+    with col4:
+        st.metric("Rainfall", f"{rainfall} mm")
+
+
+# ============================================================
+# TELEGRAM TAB
+# ============================================================
+
+with tab_telegram:
+
+    st.subheader("📱 Connect Telegram Alerts")
+
+    st.write(
+        "Connect your Telegram account to receive personal irrigation alerts."
     )
 
-    try:
+    if "telegram_connection_code" not in st.session_state:
 
-        # Transform input
-        transformed_input = preprocessor.transform(
-            input_data
-        )
+        st.session_state["telegram_connection_code"] = uuid.uuid4().hex[:12]
 
-        # Get feature names
-        feature_names = (
-            preprocessor.get_feature_names_out()
-        )
+    connection_code = st.session_state["telegram_connection_code"]
 
-        # Create SHAP explainer
-        explainer = shap.TreeExplainer(
-            classifier
-        )
+    telegram_bot_username = "SmartCropMonitoringBot"
 
-        # Calculate SHAP values
-        shap_values = explainer.shap_values(
-            transformed_input
-        )
+    telegram_url = (
+        f"https://t.me/{telegram_bot_username}?start={connection_code}"
+    )
+
+    st.link_button(
+        "🤖 Open Telegram Bot",
+        telegram_url,
+        use_container_width=True
+    )
+
+    st.info(
+        "1. Open the Telegram bot using the button above.\n\n"
+        "2. Press Start in Telegram.\n\n"
+        "3. Return here and click Connect Telegram."
+    )
+
+    if st.button("🔗 Connect Telegram", use_container_width=True, type="primary"):
+
+        with st.spinner("Checking Telegram connection..."):
+            chat_id = get_telegram_chat_id(connection_code)
+
+        if chat_id:
+
+            st.session_state["telegram_chat_id"] = chat_id
+
+            st.success("✅ Telegram connected successfully!")
+
+            st.info(
+                "Your irrigation alerts will be sent only "
+                "to your connected Telegram account."
+            )
+
+        else:
+
+            st.warning(
+                "Telegram connection not found. "
+                "Please open the bot, press Start, "
+                "and then click Connect Telegram again."
+            )
+
+    if st.session_state.get("telegram_chat_id"):
+        st.success("Status: Telegram is connected for this session ✅")
+    else:
+        st.warning("Status: Telegram is not connected yet ⚠️")
 
 
-        # ----------------------------------------------------
-        # HANDLE SHAP OUTPUT
-        # ----------------------------------------------------
+# ============================================================
+# VOICE ASSISTANT TAB
+# ============================================================
 
-        if isinstance(shap_values, list):
+with tab_voice:
 
-            shap_array = shap_values[prediction][0]
+    st.subheader("🎙️ Voice Assistant")
 
-        elif len(shap_values.shape) == 3:
+    st.write(
+        "Click the microphone button and ask your irrigation question."
+    )
 
-            shap_array = shap_values[
-                0,
-                :,
-                prediction
+    audio = mic_recorder(
+        start_prompt="🎙️ Start Recording",
+        stop_prompt="⏹️ Stop Recording",
+        key="voice_recorder"
+    )
+
+    if audio:
+
+        st.success("Voice recorded successfully.")
+
+        try:
+
+            with st.spinner("Transcribing your question..."):
+
+                audio_bytes = audio["bytes"]
+
+                audio_segment = AudioSegment.from_file(
+                    BytesIO(audio_bytes),
+                    format="webm"
+                )
+
+                wav_buffer = BytesIO()
+                audio_segment.export(wav_buffer, format="wav")
+                wav_buffer.seek(0)
+
+                recognizer = sr.Recognizer()
+
+                with sr.AudioFile(wav_buffer) as source:
+                    recorded_audio = recognizer.record(source)
+
+                text = recognizer.recognize_google(
+                    recorded_audio,
+                    language="en-IN"
+                )
+
+            st.subheader("📝 Your Question")
+            st.write(text)
+
+            question = text.lower()
+
+            irrigation_words = [
+                "irrigation", "water", "watering", "irrigate",
+                "paani", "moisture", "rainfall", "crop"
             ]
 
-        else:
+            if any(word in question for word in irrigation_words):
 
-            shap_array = shap_values[0]
+                with st.spinner("Thinking..."):
 
+                    voice_prediction = model.predict(input_data)[0]
+                    voice_probability = model.predict_proba(input_data)[0][1]
 
-        # ----------------------------------------------------
-        # CREATE EXPLANATION
-        # ----------------------------------------------------
+                st.subheader("🤖 Assistant Response")
 
-        explanation = pd.DataFrame({
-            "Feature": feature_names,
-            "SHAP_Value": shap_array
-        })
+                if voice_prediction == 1:
 
-        explanation["Absolute_Impact"] = (
-            explanation["SHAP_Value"].abs()
-        )
+                    response_text = (
+                        f"Irrigation is required for your {crop_type} crop. "
+                        f"The irrigation probability is {voice_probability * 100:.1f} percent. "
+                        f"The current field conditions indicate that the crop may need water."
+                    )
 
-        explanation = explanation.sort_values(
-            "Absolute_Impact",
-            ascending=False
-        )
+                    st.error("🚨 IRRIGATION REQUIRED")
 
-        top_features = explanation.head(5)
+                else:
 
+                    response_text = (
+                        f"Irrigation is not required for your {crop_type} crop. "
+                        f"The irrigation probability is {voice_probability * 100:.1f} percent. "
+                        f"The current field conditions do not indicate an immediate need for irrigation."
+                    )
 
-        # ----------------------------------------------------
-        # TOP FACTORS
-        # ----------------------------------------------------
+                    st.success("✅ IRRIGATION NOT REQUIRED")
 
-        st.write(
-            "### Top Factors Influencing the Prediction"
-        )
+                st.write(response_text)
 
-        for _, row in top_features.iterrows():
+                st.metric("Irrigation Probability", f"{voice_probability * 100:.1f}%")
 
-            feature = row["Feature"]
-            shap_value = row["SHAP_Value"]
+                with st.spinner("Generating voice response..."):
 
-            feature = feature.replace(
-                "categorical__",
-                ""
-            )
+                    tts = gTTS(text=response_text, lang="en", slow=False)
+                    audio_output = BytesIO()
+                    tts.write_to_fp(audio_output)
+                    audio_output.seek(0)
 
-            feature = feature.replace(
-                "remainder__",
-                ""
-            )
-
-
-            if "Soil_Moisture" in feature:
-
-                friendly_name = "Soil Moisture"
-
-            elif "Temperature" in feature:
-
-                friendly_name = "Temperature"
-
-            elif "Humidity" in feature:
-
-                friendly_name = "Humidity"
-
-            elif "Rainfall" in feature:
-
-                friendly_name = "Rainfall"
-
-            elif "Crop_Type" in feature:
-
-                friendly_name = "Crop Type"
-
-            elif "Growth_Stage" in feature:
-
-                friendly_name = "Growth Stage"
-
-            else:
-
-                friendly_name = feature
-
-
-            if shap_value > 0:
-
-                explanation_text = (
-                    f"{friendly_name} increased "
-                    "the irrigation requirement."
-                )
-
-            else:
-
-                explanation_text = (
-                    f"{friendly_name} reduced "
-                    "the irrigation requirement."
-                )
-
-
-            st.write(
-                f"🔹 **{explanation_text}**"
-            )
-
-
-        # ----------------------------------------------------
-        # SHAP CHART
-        # ----------------------------------------------------
-
-        st.write(
-            "### 📊 Feature Impact"
-        )
-
-        chart_data = top_features.set_index(
-            "Feature"
-        )["SHAP_Value"]
-
-        st.bar_chart(
-            chart_data
-        )
-
-
-    except Exception as error:
-
-        st.warning(
-            "The model prediction was successful, "
-            "but the SHAP explanation could not be generated."
-        )
-
-        st.write(
-            f"Technical details: {error}"
-        )
-
-
-# ============================================================
-# VOICE ASSISTANT
-# ============================================================
-
-st.divider()
-
-st.subheader("🎙️ Voice Assistant")
-
-st.write(
-    "Click the microphone button and ask your irrigation question."
-)
-
-audio = mic_recorder(
-    start_prompt="🎙️ Start Recording",
-    stop_prompt="⏹️ Stop Recording",
-    key="voice_recorder"
-)
-
-
-# ============================================================
-# VOICE PROCESSING
-# ============================================================
-
-if audio:
-
-    st.success(
-        "Voice recorded successfully."
-    )
-
-    try:
-
-        audio_bytes = audio["bytes"]
-
-        # Convert WebM to WAV
-        audio_segment = AudioSegment.from_file(
-            BytesIO(audio_bytes),
-            format="webm"
-        )
-
-        wav_buffer = BytesIO()
-
-        audio_segment.export(
-            wav_buffer,
-            format="wav"
-        )
-
-        wav_buffer.seek(0)
-
-
-        # Speech recognition
-        recognizer = sr.Recognizer()
-
-        with sr.AudioFile(wav_buffer) as source:
-
-            recorded_audio = recognizer.record(
-                source
-            )
-
-        text = recognizer.recognize_google(
-            recorded_audio,
-            language="en-IN"
-        )
-
-
-        st.subheader(
-            "📝 Your Question"
-        )
-
-        st.write(text)
-
-
-        # ----------------------------------------------------
-        # QUESTION ANALYSIS
-        # ----------------------------------------------------
-
-        question = text.lower()
-
-        irrigation_words = [
-            "irrigation",
-            "water",
-            "watering",
-            "irrigate",
-            "paani",
-            "moisture",
-            "rainfall",
-            "crop"
-        ]
-
-
-        if any(
-            word in question
-            for word in irrigation_words
-        ):
-
-            # Voice prediction uses the same
-            # current field conditions
-
-            voice_prediction = model.predict(
-                input_data
-            )[0]
-
-            voice_probability = model.predict_proba(
-                input_data
-            )[0][1]
-
-
-            st.subheader(
-                "🤖 Assistant Response"
-            )
-
-
-            if voice_prediction == 1:
-
-                response_text = (
-                    f"Irrigation is required for your "
-                    f"{crop_type} crop. "
-                    f"The irrigation probability is "
-                    f"{voice_probability * 100:.1f} percent. "
-                    f"The current field conditions indicate "
-                    f"that the crop may need water."
-                )
-
-                st.error(
-                    "🚨 IRRIGATION REQUIRED"
-                )
+                st.audio(audio_output, format="audio/mp3")
 
             else:
 
                 response_text = (
-                    f"Irrigation is not required for your "
-                    f"{crop_type} crop. "
-                    f"The irrigation probability is "
-                    f"{voice_probability * 100:.1f} percent. "
-                    f"The current field conditions do not "
-                    f"indicate an immediate need for irrigation."
+                    "I can help you with irrigation monitoring. "
+                    "Please ask a question related to irrigation, "
+                    "soil moisture, rainfall, crop conditions or watering."
                 )
 
-                st.success(
-                    "✅ IRRIGATION NOT REQUIRED"
-                )
+                st.subheader("🤖 Assistant Response")
+                st.write(response_text)
 
+                tts = gTTS(text=response_text, lang="en", slow=False)
+                audio_output = BytesIO()
+                tts.write_to_fp(audio_output)
+                audio_output.seek(0)
 
-            st.write(
-                response_text
+                st.audio(audio_output, format="audio/mp3")
+
+        except sr.UnknownValueError:
+
+            st.warning(
+                "Sorry, I could not understand the audio. "
+                "Please speak clearly and try again."
             )
 
-            st.metric(
-                "Irrigation Probability",
-                f"{voice_probability * 100:.1f}%"
+        except sr.RequestError:
+
+            st.error(
+                "Speech recognition service is unavailable. "
+                "Please check your internet connection."
             )
 
+        except Exception as error:
 
-            # Text to speech
-            tts = gTTS(
-                text=response_text,
-                lang="en",
-                slow=False
-            )
-
-            audio_output = BytesIO()
-
-            tts.write_to_fp(
-                audio_output
-            )
-
-            audio_output.seek(0)
-
-            st.audio(
-                audio_output,
-                format="audio/mp3"
-            )
-
-
-        else:
-
-            response_text = (
-                "I can help you with irrigation monitoring. "
-                "Please ask a question related to irrigation, "
-                "soil moisture, rainfall, crop conditions "
-                "or watering."
-            )
-
-            st.subheader(
-                "🤖 Assistant Response"
-            )
-
-            st.write(
-                response_text
-            )
-
-
-            tts = gTTS(
-                text=response_text,
-                lang="en",
-                slow=False
-            )
-
-            audio_output = BytesIO()
-
-            tts.write_to_fp(
-                audio_output
-            )
-
-            audio_output.seek(0)
-
-            st.audio(
-                audio_output,
-                format="audio/mp3"
-            )
-
-
-    except sr.UnknownValueError:
-
-        st.warning(
-            "Sorry, I could not understand the audio. "
-            "Please speak clearly and try again."
-        )
-
-
-    except sr.RequestError:
-
-        st.error(
-            "Speech recognition service is unavailable. "
-            "Please check your internet connection."
-        )
-
-
-    except Exception as error:
-
-        st.error(
-            f"An error occurred while processing the voice: {error}"
-        )
+            st.error(f"An error occurred while processing the voice: {error}")
 
 
 # ============================================================
-# CURRENT FIELD CONDITIONS
+# ABOUT TAB
 # ============================================================
 
-st.divider()
+with tab_about:
 
-st.subheader(
-    "🌾 Current Field Conditions"
-)
+    st.subheader("ℹ️ About this project")
 
-col1, col2 = st.columns(2)
+    st.write(
+        """
+        **Smart Crop Monitoring System** predicts whether irrigation is
+        required using soil moisture, temperature, humidity, rainfall,
+        crop type and growth stage.
 
-with col1:
-
-    st.metric(
-        "Soil Moisture",
-        f"{soil_moisture}%"
+        - 🤖 Machine Learning model for prediction
+        - 🧠 SHAP-based Explainable AI
+        - 📱 Multi-user Telegram alerts
+        - 🎙️ Voice assistant (speech-to-text + text-to-speech)
+        """
     )
 
-    st.metric(
-        "Temperature",
-        f"{temperature}°C"
-    )
-
-
-with col2:
-
-    st.metric(
-        "Humidity",
-        f"{humidity}%"
-    )
-
-    st.metric(
-        "Rainfall",
-        f"{rainfall} mm"
+    st.info(
+        "This system is a machine-learning prototype. "
+        "Irrigation decisions should be validated using "
+        "actual field conditions and agronomic recommendations."
     )
 
 
 # ============================================================
-# DISCLAIMER
+# FOOTER
 # ============================================================
 
-st.info(
-    "This system is a machine-learning prototype. "
-    "Irrigation decisions should be validated using "
-    "actual field conditions and agronomic recommendations."
+st.markdown(
+    """
+    <footer class="app-footer">
+        Built with Python &amp; Streamlit · by Kartik ·
+        <a href="https://github.com/chkartik16" target="_blank">GitHub</a>
+    </footer>
+    """,
+    unsafe_allow_html=True
 )
