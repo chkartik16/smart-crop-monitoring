@@ -801,7 +801,7 @@ with tab_telegram:
     # Replace with your bot's username and your deployed app's
     # exact HTTPS URL (must match the domain set via BotFather).
     render_telegram_login_widget(
-        bot_username="SmartCropMonitoringBot",
+        bot_username="SmartCropMonitoringbot",
         app_url="https://smart-crop-monitoring-mpbhpxpwniuto5kv2ygto4.streamlit.app"
     )
 
