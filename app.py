@@ -772,42 +772,80 @@ with tab_telegram:
 
     st.write(t("connect_telegram_desc"))
 
-    if "telegram_connection_code" not in st.session_state:
+    # ------------------------------------------------------
+    # Check for a Telegram Login Widget redirect on this load
+    # ------------------------------------------------------
 
-        st.session_state["telegram_connection_code"] = uuid.uuid4().hex[:12]
+    query_params = st.query_params
 
-    connection_code = st.session_state["telegram_connection_code"]
+    if "hash" in query_params and not st.session_state.get("telegram_chat_id"):
 
-    telegram_bot_username = "SmartCropMonitoringbot"  
+        bot_token = st.secrets["TELEGRAM_BOT_TOKEN"]
+        auth_data = {k: v for k, v in query_params.items()}
 
-    telegram_url = (
-        f"https://t.me/{telegram_bot_username}?start={connection_code}"
-    )
+        if verify_telegram_login(auth_data, bot_token):
 
-    st.link_button(
-        t("open_bot"),
-        telegram_url,
-        use_container_width=True
-    )
-
-    st.info(t("manual_steps"))
-
-    if st.button(t("connect_button"), use_container_width=True, type="primary"):
-
-        with st.spinner(t("checking_connection")):
-            chat_id = get_telegram_chat_id(connection_code)
-
-        if chat_id:
-
-            st.session_state["telegram_chat_id"] = chat_id
-            save_telegram_user(chat_id)
-
+            st.session_state["telegram_chat_id"] = auth_data["id"]
+            save_telegram_user(auth_data["id"])
+            st.query_params.clear()
             st.success(t("connected_success"))
             st.info(t("connected_info"))
 
         else:
 
             st.warning(t("not_connected_warning"))
+
+    st.markdown(f"#### {t('quick_connect')}")
+    st.caption(t("quick_connect_desc"))
+
+    # bot_username must exactly match your bot's @username casing
+    # (lowercase 'b' confirmed via BotFather). app_url must exactly
+    # match the domain linked via BotFather /setdomain.
+    render_telegram_login_widget(
+        bot_username="SmartCropMonitoringbot",
+        app_url="https://smart-crop-monitoring-mpbhpxpwniuto5kv2ygto4.streamlit.app"
+    )
+
+    st.divider()
+
+    with st.expander(t("manual_connect")):
+
+        if "telegram_connection_code" not in st.session_state:
+
+            st.session_state["telegram_connection_code"] = uuid.uuid4().hex[:12]
+
+        connection_code = st.session_state["telegram_connection_code"]
+
+        telegram_bot_username = "SmartCropMonitoringbot"
+
+        telegram_url = (
+            f"https://t.me/{telegram_bot_username}?start={connection_code}"
+        )
+
+        st.link_button(
+            t("open_bot"),
+            telegram_url,
+            use_container_width=True
+        )
+
+        st.info(t("manual_steps"))
+
+        if st.button(t("connect_button"), use_container_width=True, type="primary"):
+
+            with st.spinner(t("checking_connection")):
+                chat_id = get_telegram_chat_id(connection_code)
+
+            if chat_id:
+
+                st.session_state["telegram_chat_id"] = chat_id
+                save_telegram_user(chat_id)
+
+                st.success(t("connected_success"))
+                st.info(t("connected_info"))
+
+            else:
+
+                st.warning(t("not_connected_warning"))
 
     if st.session_state.get("telegram_chat_id"):
         st.success(t("status_connected"))
