@@ -778,7 +778,7 @@ with tab_telegram:
 
     connection_code = st.session_state["telegram_connection_code"]
 
-    telegram_bot_username = "SmartCropMonitoringbot"
+    telegram_bot_username = "SmartCropMonitoringbot"  
 
     telegram_url = (
         f"https://t.me/{telegram_bot_username}?start={connection_code}"
