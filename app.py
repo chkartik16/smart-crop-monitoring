@@ -13,9 +13,6 @@ from io import BytesIO
 from gtts import gTTS
 from pydub import AudioSegment
 from streamlit_mic_recorder import mic_recorder
-import hashlib
-import hmac
-import streamlit.components.v1 as components
 
 #twilio_client = Client(
 #    os.getenv("TWILIO_ACCOUNT_SID"),
@@ -64,8 +61,6 @@ TEXT = {
         "lbl_rainfall": "Rainfall",
         "connect_telegram_title": "📱 Connect Telegram Alerts",
         "connect_telegram_desc": "Connect your Telegram account to receive personal irrigation alerts.",
-        "quick_connect": "⚡ Quick Connect (one click)",
-        "quick_connect_desc": "Tap below and confirm in Telegram — no codes to copy.",
         "manual_connect": "🔧 Manual Connect (backup method)",
         "open_bot": "🤖 Open Telegram Bot",
         "manual_steps": "1. Open the Telegram bot using the button above.\n\n2. Press Start in Telegram.\n\n3. Return here and click Connect Telegram.",
@@ -138,8 +133,6 @@ TEXT = {
         "lbl_rainfall": "वर्षा",
         "connect_telegram_title": "📱 टेलीग्राम अलर्ट कनेक्ट करें",
         "connect_telegram_desc": "व्यक्तिगत सिंचाई अलर्ट पाने के लिए अपना टेलीग्राम खाता कनेक्ट करें।",
-        "quick_connect": "⚡ त्वरित कनेक्ट (एक क्लिक)",
-        "quick_connect_desc": "नीचे टैप करें और टेलीग्राम में पुष्टि करें — कोई कोड कॉपी करने की जरूरत नहीं।",
         "manual_connect": "🔧 मैन्युअल कनेक्ट (बैकअप तरीका)",
         "open_bot": "🤖 टेलीग्राम बॉट खोलें",
         "manual_steps": "1. ऊपर दिए गए बटन से टेलीग्राम बॉट खोलें।\n\n2. टेलीग्राम में Start दबाएं।\n\n3. यहाँ वापस आएं और Connect Telegram पर क्लिक करें।",
@@ -443,52 +436,12 @@ def save_telegram_user(chat_id):
         )
 
 
-# ============================================================
-# TELEGRAM LOGIN WIDGET — ONE-CLICK CONNECT
-# ============================================================
-# Requires: bot domain must be linked once via BotFather
-# (send /setdomain to @BotFather and give it this app's URL).
-# On click, Telegram redirects back with signed user data in
-# the URL — we verify the signature with the bot token and
-# use the returned Telegram user id directly as the chat_id.
-# ============================================================
-
-def verify_telegram_login(auth_data, bot_token):
-
-    data = dict(auth_data)
-    received_hash = data.pop("hash", None)
-
-    if not received_hash:
-        return False
-
-    check_string = "\n".join(
-        f"{key}={data[key]}" for key in sorted(data.keys())
-    )
-
-    secret_key = hashlib.sha256(bot_token.encode()).digest()
-
-    computed_hash = hmac.new(
-        secret_key,
-        check_string.encode(),
-        hashlib.sha256
-    ).hexdigest()
-
-    return computed_hash == received_hash
-
-
-def render_telegram_login_widget(bot_username, app_url):
-
-    widget_html = f"""
-    <script async src="https://telegram.org/js/telegram-widget.js?22"
-        data-telegram-login="{bot_username}"
-        data-size="large"
-        data-radius="10"
-        data-auth-url="{app_url}"
-        data-request-access="write">
-    </script>
-    """
-
-    components.html(widget_html, height=60)
+# NOTE: An earlier version of this app attempted a one-click
+# "Telegram Login Widget" here. It was removed because Telegram's
+# widget cannot verify the page domain when rendered inside
+# Streamlit's sandboxed component iframe (a nested-iframe limitation),
+# so the button never rendered. The manual connect flow below is the
+# reliable method and is used as the only connection path.
 
 
 # ============================================================
@@ -772,80 +725,42 @@ with tab_telegram:
 
     st.write(t("connect_telegram_desc"))
 
-    # ------------------------------------------------------
-    # Check for a Telegram Login Widget redirect on this load
-    # ------------------------------------------------------
+    if "telegram_connection_code" not in st.session_state:
 
-    query_params = st.query_params
+        st.session_state["telegram_connection_code"] = uuid.uuid4().hex[:12]
 
-    if "hash" in query_params and not st.session_state.get("telegram_chat_id"):
+    connection_code = st.session_state["telegram_connection_code"]
 
-        bot_token = st.secrets["TELEGRAM_BOT_TOKEN"]
-        auth_data = {k: v for k, v in query_params.items()}
+    telegram_bot_username = "SmartCropMonitoringbot"
 
-        if verify_telegram_login(auth_data, bot_token):
+    telegram_url = (
+        f"https://t.me/{telegram_bot_username}?start={connection_code}"
+    )
 
-            st.session_state["telegram_chat_id"] = auth_data["id"]
-            save_telegram_user(auth_data["id"])
-            st.query_params.clear()
+    st.link_button(
+        t("open_bot"),
+        telegram_url,
+        use_container_width=True
+    )
+
+    st.info(t("manual_steps"))
+
+    if st.button(t("connect_button"), use_container_width=True, type="primary"):
+
+        with st.spinner(t("checking_connection")):
+            chat_id = get_telegram_chat_id(connection_code)
+
+        if chat_id:
+
+            st.session_state["telegram_chat_id"] = chat_id
+            save_telegram_user(chat_id)
+
             st.success(t("connected_success"))
             st.info(t("connected_info"))
 
         else:
 
             st.warning(t("not_connected_warning"))
-
-    st.markdown(f"#### {t('quick_connect')}")
-    st.caption(t("quick_connect_desc"))
-
-    # bot_username must exactly match your bot's @username casing
-    # (lowercase 'b' confirmed via BotFather). app_url must exactly
-    # match the domain linked via BotFather /setdomain.
-    render_telegram_login_widget(
-        bot_username="SmartCropMonitoringbot",
-        app_url="https://smart-crop-monitoring-mpbhpxpwniuto5kv2ygto4.streamlit.app"
-    )
-
-    st.divider()
-
-    with st.expander(t("manual_connect")):
-
-        if "telegram_connection_code" not in st.session_state:
-
-            st.session_state["telegram_connection_code"] = uuid.uuid4().hex[:12]
-
-        connection_code = st.session_state["telegram_connection_code"]
-
-        telegram_bot_username = "SmartCropMonitoringbot"
-
-        telegram_url = (
-            f"https://t.me/{telegram_bot_username}?start={connection_code}"
-        )
-
-        st.link_button(
-            t("open_bot"),
-            telegram_url,
-            use_container_width=True
-        )
-
-        st.info(t("manual_steps"))
-
-        if st.button(t("connect_button"), use_container_width=True, type="primary"):
-
-            with st.spinner(t("checking_connection")):
-                chat_id = get_telegram_chat_id(connection_code)
-
-            if chat_id:
-
-                st.session_state["telegram_chat_id"] = chat_id
-                save_telegram_user(chat_id)
-
-                st.success(t("connected_success"))
-                st.info(t("connected_info"))
-
-            else:
-
-                st.warning(t("not_connected_warning"))
 
     if st.session_state.get("telegram_chat_id"):
         st.success(t("status_connected"))
