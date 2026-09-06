@@ -4,7 +4,7 @@ import streamlit as st
 import pandas as pd
 import joblib
 import shap
-import speech_recognition as sr
+import speech_recognition as sr  
 import requests
 import json
 import uuid
@@ -14,10 +14,20 @@ from gtts import gTTS
 from pydub import AudioSegment
 from streamlit_mic_recorder import mic_recorder
 
+import database
+from weather import fetch_weather, WeatherFetchError
+
 #twilio_client = Client(
 #    os.getenv("TWILIO_ACCOUNT_SID"),
 #       os.getenv("TWILIO_AUTH_TOKEN")
 #)
+
+
+# ============================================================
+# DATABASE INITIALISATION (safe to call on every run)
+# ============================================================
+
+database.init_db()
 
 
 # ============================================================
@@ -96,6 +106,37 @@ TEXT = {
         """,
         "disclaimer": "This system is a machine-learning prototype. Irrigation decisions should be validated using actual field conditions and agronomic recommendations.",
         "footer": 'Built with Python &amp; Streamlit · by Kartik · <a href="https://github.com/chkartik16" target="_blank">GitHub</a>',
+        # --- Auth ---
+        "login_title": "🔐 Login",
+        "signup_title": "🆕 Create Account",
+        "username": "Username",
+        "password": "Password",
+        "login_button": "Login",
+        "signup_button": "Create Account",
+        "login_tab": "Login",
+        "signup_tab": "Sign Up",
+        "login_failed": "Incorrect username or password.",
+        "signup_success": "Account created! Please log in.",
+        "signup_failed": "That username is already taken.",
+        "fill_both_fields": "Please enter both a username and a password.",
+        "welcome_user": "Logged in as **{username}**",
+        "logout_button": "Log out",
+        "app_locked_desc": "Log in or create a free account to use the Smart Crop Monitoring System.",
+        # --- Weather ---
+        "weather_title": "☁️ Auto-fetch Weather",
+        "weather_city": "City name",
+        "weather_fetch_button": "Fetch Live Weather",
+        "weather_fetching": "Fetching live weather...",
+        "weather_applied": "Weather data applied for {city}.",
+        "weather_error": "Could not fetch weather: {error}",
+        "weather_key_missing": "Weather auto-fetch is not configured (missing OPENWEATHER_API_KEY).",
+        # --- History / Analytics ---
+        "tab_history": "📊 History",
+        "history_title": "📊 Your Prediction History",
+        "history_empty": "No predictions logged yet. Run a check on the Predict tab first.",
+        "history_soil_chart": "Soil Moisture Over Time (%)",
+        "history_prob_chart": "Irrigation Probability Over Time (%)",
+        "history_download": "⬇️ Download History as CSV",
     },
     "hi": {
         "hero_title": "🌱 स्मार्ट क्रॉप मॉनिटरिंग सिस्टम",
@@ -168,6 +209,37 @@ TEXT = {
         """,
         "disclaimer": "यह सिस्टम एक मशीन-लर्निंग प्रोटोटाइप है। सिंचाई संबंधी निर्णय वास्तविक खेत की स्थिति और कृषि विशेषज्ञ की सलाह के आधार पर ही लें।",
         "footer": 'Python और Streamlit से बना · Kartik द्वारा · <a href="https://github.com/chkartik16" target="_blank">GitHub</a>',
+        # --- Auth ---
+        "login_title": "🔐 लॉगिन",
+        "signup_title": "🆕 खाता बनाएं",
+        "username": "यूज़रनेम",
+        "password": "पासवर्ड",
+        "login_button": "लॉगिन करें",
+        "signup_button": "खाता बनाएं",
+        "login_tab": "लॉगिन",
+        "signup_tab": "साइन अप",
+        "login_failed": "गलत यूज़रनेम या पासवर्ड।",
+        "signup_success": "खाता बन गया! कृपया लॉगिन करें।",
+        "signup_failed": "यह यूज़रनेम पहले से मौजूद है।",
+        "fill_both_fields": "कृपया यूज़रनेम और पासवर्ड दोनों दर्ज करें।",
+        "welcome_user": "**{username}** के रूप में लॉगिन है",
+        "logout_button": "लॉगआउट",
+        "app_locked_desc": "स्मार्ट क्रॉप मॉनिटरिंग सिस्टम इस्तेमाल करने के लिए लॉगिन करें या मुफ़्त खाता बनाएं।",
+        # --- Weather ---
+        "weather_title": "☁️ मौसम स्वतः प्राप्त करें",
+        "weather_city": "शहर का नाम",
+        "weather_fetch_button": "लाइव मौसम प्राप्त करें",
+        "weather_fetching": "लाइव मौसम प्राप्त किया जा रहा है...",
+        "weather_applied": "{city} के लिए मौसम डेटा लागू किया गया।",
+        "weather_error": "मौसम प्राप्त नहीं हो सका: {error}",
+        "weather_key_missing": "मौसम स्वतः-प्राप्ति कॉन्फ़िगर नहीं है (OPENWEATHER_API_KEY गुम है)।",
+        # --- History / Analytics ---
+        "tab_history": "📊 इतिहास",
+        "history_title": "📊 आपका पूर्वानुमान इतिहास",
+        "history_empty": "अभी तक कोई पूर्वानुमान दर्ज नहीं हुआ। पहले Predict टैब में जांच करें।",
+        "history_soil_chart": "समय के साथ मिट्टी की नमी (%)",
+        "history_prob_chart": "समय के साथ सिंचाई संभावना (%)",
+        "history_download": "⬇️ इतिहास CSV के रूप में डाउनलोड करें",
     },
 }
 
@@ -365,6 +437,76 @@ st.markdown(
 
 
 # ============================================================
+# LOGIN / SIGNUP GATE
+# ============================================================
+
+if "username" not in st.session_state:
+    st.session_state["username"] = None
+
+if not st.session_state["username"]:
+
+    st.write(t("app_locked_desc"))
+
+    login_tab, signup_tab = st.tabs([t("login_tab"), t("signup_tab")])
+
+    with login_tab:
+
+        st.subheader(t("login_title"))
+
+        login_username = st.text_input(t("username"), key="login_username_input")
+        login_password = st.text_input(
+            t("password"), type="password", key="login_password_input"
+        )
+
+        if st.button(t("login_button"), use_container_width=True, type="primary"):
+
+            if not login_username or not login_password:
+                st.warning(t("fill_both_fields"))
+            elif database.verify_user(login_username, login_password):
+                st.session_state["username"] = login_username
+                st.rerun()
+            else:
+                st.error(t("login_failed"))
+
+    with signup_tab:
+
+        st.subheader(t("signup_title"))
+
+        signup_username = st.text_input(t("username"), key="signup_username_input")
+        signup_password = st.text_input(
+            t("password"), type="password", key="signup_password_input"
+        )
+
+        if st.button(t("signup_button"), use_container_width=True, type="primary"):
+
+            if not signup_username or not signup_password:
+                st.warning(t("fill_both_fields"))
+            elif database.create_user(signup_username, signup_password):
+                st.success(t("signup_success"))
+            else:
+                st.error(t("signup_failed"))
+
+    st.stop()
+
+else:
+
+    top_left, top_right = st.columns([4, 1])
+
+    with top_left:
+        st.caption(t("welcome_user", username=st.session_state["username"]))
+
+    with top_right:
+        if st.button(t("logout_button"), use_container_width=True):
+            st.session_state["username"] = None
+            st.rerun()
+
+    if "telegram_chat_id" not in st.session_state:
+        st.session_state["telegram_chat_id"] = database.get_telegram_chat_id(
+            st.session_state["username"]
+        )
+
+
+# ============================================================
 # GET TELEGRAM CHAT ID USING UNIQUE CONNECTION CODE
 # ============================================================
 
@@ -407,33 +549,11 @@ def get_telegram_chat_id(connection_code):
 
 
 # ============================================================
-# SAVE TELEGRAM USER
+# SAVE TELEGRAM CHAT ID (now persisted per logged-in user in SQLite)
 # ============================================================
 
 def save_telegram_user(chat_id):
-
-    file_path = "users.json"
-
-    try:
-
-        with open(file_path, "r") as file:
-            users = json.load(file)
-
-    except (FileNotFoundError, json.JSONDecodeError):
-
-        users = {}
-
-    users[str(chat_id)] = {
-        "chat_id": str(chat_id)
-    }
-
-    with open(file_path, "w") as file:
-
-        json.dump(
-            users,
-            file,
-            indent=4
-        )
+    database.set_telegram_chat_id(st.session_state["username"], chat_id)
 
 
 # NOTE: An earlier version of this app attempted a one-click
@@ -448,8 +568,8 @@ def save_telegram_user(chat_id):
 # TABS — main navigation instead of one long scroll
 # ============================================================
 
-tab_predict, tab_voice, tab_telegram, tab_about = st.tabs(
-    [t("tab_predict"), t("tab_voice"), t("tab_telegram"), t("tab_about")]
+tab_predict, tab_voice, tab_telegram, tab_history, tab_about = st.tabs(
+    [t("tab_predict"), t("tab_voice"), t("tab_telegram"), t("tab_history"), t("tab_about")]
 )
 
 
@@ -461,6 +581,47 @@ tab_predict, tab_voice, tab_telegram, tab_about = st.tabs(
 # ============================================================
 
 with tab_predict:
+
+    with st.expander(t("weather_title")):
+
+        weather_city_col, weather_button_col = st.columns([3, 1])
+
+        with weather_city_col:
+            weather_city = st.text_input(
+                t("weather_city"), value="", key="weather_city_input"
+            )
+
+        with weather_button_col:
+            st.write("")
+            st.write("")
+            fetch_clicked = st.button(t("weather_fetch_button"), use_container_width=True)
+
+        if fetch_clicked:
+
+            api_key = st.secrets.get("OPENWEATHER_API_KEY", None)
+
+            if not api_key:
+
+                st.warning(t("weather_key_missing"))
+
+            elif not weather_city:
+
+                st.warning(t("fill_both_fields"))
+
+            else:
+
+                with st.spinner(t("weather_fetching")):
+
+                    try:
+                        weather_data = fetch_weather(weather_city, api_key)
+                        st.session_state["temperature"] = weather_data["temperature"]
+                        st.session_state["humidity"] = weather_data["humidity"]
+                        st.session_state["rainfall"] = weather_data["rainfall"]
+                        st.success(t("weather_applied", city=weather_city))
+                        st.rerun()
+
+                    except WeatherFetchError as error:
+                        st.error(t("weather_error", error=error))
 
     left, right = st.columns([1, 1], gap="large")
 
@@ -590,6 +751,18 @@ with tab_predict:
             )
 
             st.progress(min(max(probability, 0.0), 1.0))
+
+        database.log_prediction(
+            username=st.session_state["username"],
+            crop_type=crop_type,
+            growth_stage=growth_stage,
+            soil_moisture=soil_moisture,
+            temperature=temperature,
+            humidity=humidity,
+            rainfall=rainfall,
+            prediction=prediction,
+            probability=probability,
+        )
 
         # ========================================================
         # SHAP EXPLANATION
@@ -916,6 +1089,57 @@ with tab_voice:
 # ============================================================
 # ABOUT TAB
 # ============================================================
+
+with tab_history:
+
+    st.subheader(t("history_title"))
+
+    history_rows = database.get_user_history(st.session_state["username"])
+
+    if not history_rows:
+
+        st.info(t("history_empty"))
+
+    else:
+
+        history_df = pd.DataFrame([dict(row) for row in history_rows])
+        history_df["timestamp"] = pd.to_datetime(history_df["timestamp"])
+        history_df = history_df.sort_values("timestamp")
+        history_df["probability_pct"] = history_df["probability"] * 100
+
+        st.dataframe(
+            history_df[[
+                "timestamp", "crop_type", "growth_stage", "soil_moisture",
+                "temperature", "humidity", "rainfall", "prediction", "probability_pct"
+            ]].sort_values("timestamp", ascending=False),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        chart_col1, chart_col2 = st.columns(2)
+
+        with chart_col1:
+            st.write(f"**{t('history_soil_chart')}**")
+            st.line_chart(
+                history_df.set_index("timestamp")["soil_moisture"]
+            )
+
+        with chart_col2:
+            st.write(f"**{t('history_prob_chart')}**")
+            st.line_chart(
+                history_df.set_index("timestamp")["probability_pct"]
+            )
+
+        csv_bytes = history_df.to_csv(index=False).encode("utf-8")
+
+        st.download_button(
+            t("history_download"),
+            data=csv_bytes,
+            file_name=f"{st.session_state['username']}_irrigation_history.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+
 
 with tab_about:
 
